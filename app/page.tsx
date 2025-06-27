@@ -8,6 +8,7 @@ import {
   useWriteContract,
   useBalance,
   useWaitForTransactionReceipt,
+  useChainId,
 } from "wagmi";
 import { useEffect, useState } from "react";
 import { injected } from "wagmi/connectors";
@@ -20,10 +21,11 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Loader2, Check, AlertCircle } from "lucide-react";
+import { Loader2, Check, AlertCircle, AlertTriangle, Shield } from "lucide-react";
 
 const crowdsaleContractAddress = "0x845Cace640aEE655698fEe57A1eA5a3a4AF00db7"; // Your Crowdsale contract address
 const tokenContractAddress = "0xB890258C3c64D289D7b4bBC5785064D2A12E7fFE";
+const SEPOLIA_CHAIN_ID = 11155111; // Sepolia testnet chain ID
 
 export default function Home() {
   const [ethAmount, setEthAmount] = useState("0.01");
@@ -86,6 +88,18 @@ export default function Home() {
   const raisedEth = parseFloat(formatEther(weiRaised));
   const progressPercentage = Math.min(Math.round((raisedEth / crowdsaleGoal) * 100), 100);
 
+  const chainId = useChainId();
+  const isSepoliaNetwork = chainId === SEPOLIA_CHAIN_ID;
+
+  // Show warning if not on Sepolia
+  useEffect(() => {
+    if (isConnected && !isSepoliaNetwork) {
+      toast.warning("Please switch to Sepolia testnet to interact with this application", {
+        duration: 6000,
+      });
+    }
+  }, [isConnected, isSepoliaNetwork]);
+
   useEffect(() => {
     if (isConfirmed) {
       refetchCrowdsaleData();
@@ -138,6 +152,49 @@ export default function Home() {
   return (
     <div className="w-full min-h-screen bg-gradient-to-b from-background to-muted/50 py-12">
       <div className="container max-w-4xl mx-auto px-4">
+        {/* Testnet Warning Banner */}
+        <div className="bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg p-4 mb-6 flex items-center gap-3">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="font-medium text-yellow-800 dark:text-yellow-300">Testnet Only</h3>
+            <p className="text-yellow-700 dark:text-yellow-400 text-sm">
+              This is a learning project running on Sepolia testnet. Please connect to Sepolia network and use only Sepolia test tokens. 
+              <strong> Do not use real money!</strong>
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a 
+                href="https://sepoliafaucet.com/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-xs bg-yellow-200 dark:bg-yellow-800 hover:bg-yellow-300 dark:hover:bg-yellow-700 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded"
+              >
+                Get Test ETH
+              </a>
+              <a 
+                href="https://chainlist.org/chain/11155111" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-xs bg-yellow-200 dark:bg-yellow-800 hover:bg-yellow-300 dark:hover:bg-yellow-700 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded"
+              >
+                Add Sepolia to Wallet
+              </a>
+            </div>
+          </div>
+        </div>
+        
+        {/* Network Warning */}
+        {isConnected && !isSepoliaNetwork && (
+          <div className="bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg p-4 mb-6 flex items-center gap-3">
+            <Shield className="h-5 w-5 text-red-600 dark:text-red-500 flex-shrink-0" />
+            <div>
+              <h3 className="font-medium text-red-800 dark:text-red-300">Wrong Network</h3>
+              <p className="text-red-700 dark:text-red-400 text-sm">
+                You are not connected to Sepolia testnet. Please switch your network in your wallet.
+              </p>
+            </div>
+          </div>
+        )}
+        
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
@@ -150,6 +207,13 @@ export default function Home() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                 <Badge variant="outline" className="px-3 py-1 font-mono">
                   {address?.slice(0, 6)}...{address?.slice(-4)}
+                </Badge>
+                {/* Network Badge */}
+                <Badge 
+                  variant={isSepoliaNetwork ? "default" : "destructive"} 
+                  className="px-3 py-1"
+                >
+                  {isSepoliaNetwork ? "Sepolia" : "Wrong Network"}
                 </Badge>
                 <Button variant="outline" size="sm" onClick={() => disconnect()}>
                   Disconnect
@@ -286,7 +350,7 @@ export default function Home() {
                 <Button 
                   className="w-full" 
                   onClick={handlePurchase}
-                  disabled={isPurchasePending || isConfirming}
+                  disabled={isPurchasePending || isConfirming || !isSepoliaNetwork}
                 >
                   {isPurchasePending ? (
                     <>
@@ -298,6 +362,8 @@ export default function Home() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Purchasing...
                     </>
+                  ) : !isSepoliaNetwork ? (
+                    "Switch to Sepolia"
                   ) : (
                     "Buy AWSM Tokens"
                   )}
