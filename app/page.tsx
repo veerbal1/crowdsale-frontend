@@ -1,103 +1,251 @@
-import Image from "next/image";
+"use client";
+
+import {
+  useAccount,
+  useConnect,
+  useDisconnect,
+  useReadContracts,
+  useWriteContract,
+  useBalance,
+  useWaitForTransactionReceipt,
+} from "wagmi";
+import { useEffect, useState } from "react";
+import { injected } from "wagmi/connectors";
+import { parseEther, formatEther } from "viem";
+import { crowdsaleAbi } from "@/lib/abi";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
+import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+import { Loader2, Check, AlertCircle } from "lucide-react";
+
+const crowdsaleContractAddress = "0x845Cace640aEE655698fEe57A1eA5a3a4AF00db7"; // Your Crowdsale contract address
+const tokenContractAddress = "0xB890258C3c64D289D7b4bBC5785064D2A12E7fFE";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [ethAmount, setEthAmount] = useState("0.01");
+  const { address, isConnected } = useAccount();
+  const { connect } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { data: ethBalance } = useBalance({ address });
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  const { data: awsmBalance, refetch: refetchAwsmBalance } = useBalance({
+    address,
+    token: tokenContractAddress,
+  });
+
+  const {
+    data: hash,
+    writeContract,
+    isPending: isPurchasePending,
+    error: purchaseError,
+  } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed } =
+    useWaitForTransactionReceipt({
+      hash,
+    });
+
+  const crowdsaleContract = {
+    address: crowdsaleContractAddress,
+    abi: crowdsaleAbi,
+  } as const;
+
+  const { data: crowdsaleData, refetch: refetchCrowdsaleData } =
+    useReadContracts({
+      contracts: [
+        {
+          ...crowdsaleContract,
+          functionName: "rate",
+        },
+        {
+          ...crowdsaleContract,
+          functionName: "weiRaised",
+        },
+      ],
+    });
+
+  const rate =
+    crowdsaleData?.[0].status === "success" ? crowdsaleData[0].result : 0;
+  const weiRaised =
+    crowdsaleData?.[1].status === "success" ? crowdsaleData[1].result : BigInt(0);
+
+  useEffect(() => {
+    if (isConfirmed) {
+      refetchCrowdsaleData();
+      refetchAwsmBalance();
+      toast.success("Purchase successful! Your new balance should update shortly.");
+    }
+  }, [isConfirmed, refetchCrowdsaleData, refetchAwsmBalance]);
+
+  useEffect(() => {
+    if (purchaseError) {
+      toast.error(`Error: ${purchaseError.message || "Transaction failed"}`);
+    }
+  }, [purchaseError]);
+
+  const handlePurchase = async () => {
+    const amountToBuy = parseFloat(ethAmount);
+    if (isNaN(amountToBuy) || amountToBuy <= 0) {
+      toast.error("Please enter a valid ETH amount");
+      return;
+    }
+
+    writeContract({
+      ...crowdsaleContract,
+      functionName: "buyTokens",
+      args: [address!],
+      value: parseEther(ethAmount),
+    });
+  };
+
+  const tokensToReceive =
+    rate > 0 && ethAmount ? parseEther(ethAmount) * BigInt(rate) : BigInt(0);
+
+  return (
+    <div className="w-full min-h-screen bg-gradient-to-b from-background to-muted/50 py-12">
+      <div className="container max-w-4xl mx-auto px-4">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              AwesomeDAO Crowdsale
+            </h1>
+            <p className="text-muted-foreground mt-1">Purchase AWSM tokens for your wallet</p>
+          </div>
+          <div>
+            {isConnected ? (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                <Badge variant="outline" className="px-3 py-1 font-mono">
+                  {address?.slice(0, 6)}...{address?.slice(-4)}
+                </Badge>
+                <Button variant="outline" size="sm" onClick={() => disconnect()}>
+                  Disconnect
+                </Button>
+              </div>
+            ) : (
+              <Button onClick={() => connect({ connector: injected() })}>
+                Connect Wallet
+              </Button>
+            )}
+          </div>
+        </header>
+
+        <Card className="mb-8 border-muted/40 shadow-sm">
+          <CardHeader>
+            <CardTitle>Sale Status</CardTitle>
+            <CardDescription>Current crowdsale metrics</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Exchange Rate:</span>
+              <span className="font-medium">1 ETH = {rate.toString()} AWSM</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Raised:</span>
+              <span className="font-medium">{formatEther(weiRaised)} ETH</span>
+            </div>
+            <div className="pt-2">
+              <Progress value={30} className="h-2" />
+              <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                <span>0 ETH</span>
+                <span>Goal: 100 ETH</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {isConnected ? (
+          <Card className="border-muted/40 shadow-sm">
+            <CardHeader>
+              <CardTitle>Your Wallet</CardTitle>
+              <CardDescription>Current balance and purchase options</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card className="border-muted/30">
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-muted-foreground mb-1">Your ETH Balance</p>
+                      <p className="text-2xl font-bold">
+                        {ethBalance
+                          ? `${parseFloat(ethBalance.formatted).toFixed(4)} ETH`
+                          : "Loading..."}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-muted/30">
+                  <CardContent className="pt-6">
+                    <div className="text-center">
+                      <p className="text-muted-foreground mb-1">Your AWSM Balance</p>
+                      <p className="text-2xl font-bold">
+                        {awsmBalance ? `${parseFloat(awsmBalance.formatted).toFixed(2)}` : "Loading..."}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Separator />
+
+              <div>
+                <h3 className="text-lg font-medium mb-4">Make a Purchase</h3>
+                <div className="flex items-center space-x-2 mb-4">
+                  <Input
+                    type="number"
+                    value={ethAmount}
+                    onChange={(e) => setEthAmount(e.target.value)}
+                    step="0.01"
+                    min="0"
+                    className="max-w-[200px]"
+                  />
+                  <span className="font-medium">ETH</span>
+                </div>
+
+                <Card className="bg-muted/30 border-dashed border-muted mb-6">
+                  <CardContent className="py-4 text-center">
+                    <p className="text-muted-foreground">You will receive approximately</p>
+                    <p className="text-xl font-bold">{formatEther(tokensToReceive)} AWSM</p>
+                  </CardContent>
+                </Card>
+
+                <Button 
+                  className="w-full" 
+                  onClick={handlePurchase}
+                  disabled={isPurchasePending || isConfirming}
+                >
+                  {isPurchasePending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Check Wallet
+                    </>
+                  ) : isConfirming ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Purchasing...
+                    </>
+                  ) : (
+                    "Buy AWSM Tokens"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-muted/40 shadow-sm text-center p-8">
+            <CardContent className="pt-6 flex flex-col items-center gap-4">
+              <AlertCircle className="h-12 w-12 text-muted-foreground" />
+              <p className="text-xl">Please connect your wallet to participate in the sale.</p>
+              <Button onClick={() => connect({ connector: injected() })}>
+                Connect Wallet
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
