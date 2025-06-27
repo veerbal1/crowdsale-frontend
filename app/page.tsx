@@ -28,6 +28,16 @@ const tokenContractAddress = "0xB890258C3c64D289D7b4bBC5785064D2A12E7fFE";
 
 export default function Home() {
   const [ethAmount, setEthAmount] = useState("0.01");
+  const [crowdsaleGoal, setCrowdsaleGoal] = useState(() => {
+    // Try to get the goal from localStorage on initial render
+    if (typeof window !== 'undefined') {
+      const savedGoal = localStorage.getItem('crowdsaleGoal');
+      return savedGoal ? parseFloat(savedGoal) : 100;
+    }
+    return 100;
+  });
+  const [isAdmin, setIsAdmin] = useState(false); // Toggle for admin view
+  const [newGoal, setNewGoal] = useState(crowdsaleGoal.toString()); // For updating the goal
   const { address, isConnected } = useAccount();
   const { connect } = useConnect();
   const { disconnect } = useDisconnect();
@@ -72,6 +82,10 @@ export default function Home() {
     crowdsaleData?.[0].status === "success" ? crowdsaleData[0].result : 0;
   const weiRaised =
     crowdsaleData?.[1].status === "success" ? crowdsaleData[1].result : BigInt(0);
+  
+  // Calculate progress percentage
+  const raisedEth = parseFloat(formatEther(weiRaised));
+  const progressPercentage = Math.min(Math.round((raisedEth / crowdsaleGoal) * 100), 100);
 
   useEffect(() => {
     if (isConfirmed) {
@@ -105,6 +119,23 @@ export default function Home() {
   const tokensToReceive =
     rate > 0 && ethAmount ? parseEther(ethAmount) * BigInt(rate) : BigInt(0);
 
+  // Function to handle goal update
+  const handleGoalUpdate = () => {
+    const goalValue = parseFloat(newGoal);
+    if (isNaN(goalValue) || goalValue <= 0) {
+      toast.error("Please enter a valid goal amount");
+      return;
+    }
+    
+    // Update state and save to localStorage
+    setCrowdsaleGoal(goalValue);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('crowdsaleGoal', goalValue.toString());
+    }
+    
+    toast.success(`Crowdsale goal updated to ${goalValue} ETH`);
+  };
+
   return (
     <div className="w-full min-h-screen bg-gradient-to-b from-background to-muted/50 py-12">
       <div className="container max-w-4xl mx-auto px-4">
@@ -115,7 +146,7 @@ export default function Home() {
             </h1>
             <p className="text-muted-foreground mt-1">Purchase AWSM tokens for your wallet</p>
           </div>
-          <div>
+          <div className="flex flex-col sm:flex-row gap-2">
             {isConnected ? (
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                 <Badge variant="outline" className="px-3 py-1 font-mono">
@@ -123,6 +154,15 @@ export default function Home() {
                 </Badge>
                 <Button variant="outline" size="sm" onClick={() => disconnect()}>
                   Disconnect
+                </Button>
+                {/* Admin toggle button */}
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setIsAdmin(!isAdmin)}
+                  className={isAdmin ? "bg-primary/10" : ""}
+                >
+                  Admin
                 </Button>
               </div>
             ) : (
@@ -132,6 +172,34 @@ export default function Home() {
             )}
           </div>
         </header>
+
+        {/* Admin Panel */}
+        {isAdmin && isConnected && (
+          <Card className="mb-8 border-primary/20 bg-primary/5 shadow-sm">
+            <CardHeader>
+              <CardTitle>Admin Controls</CardTitle>
+              <CardDescription>Configure crowdsale parameters</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end gap-2">
+                <div className="space-y-1 flex-1">
+                  <label htmlFor="goal" className="text-sm font-medium">
+                    Crowdsale Goal (ETH)
+                  </label>
+                  <Input
+                    id="goal"
+                    type="number"
+                    value={newGoal}
+                    onChange={(e) => setNewGoal(e.target.value)}
+                    step="1"
+                    min="1"
+                  />
+                </div>
+                <Button onClick={handleGoalUpdate}>Update Goal</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="mb-8 border-muted/40 shadow-sm">
           <CardHeader>
@@ -148,10 +216,14 @@ export default function Home() {
               <span className="font-medium">{formatEther(weiRaised)} ETH</span>
             </div>
             <div className="pt-2">
-              <Progress value={30} className="h-2" />
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-muted-foreground">Progress</span>
+                <span className="text-sm font-medium">{progressPercentage}%</span>
+              </div>
+              <Progress value={progressPercentage} className="h-2" />
               <div className="flex justify-between mt-1 text-xs text-muted-foreground">
                 <span>0 ETH</span>
-                <span>Goal: 100 ETH</span>
+                <span>Goal: {crowdsaleGoal} ETH</span>
               </div>
             </div>
           </CardContent>
